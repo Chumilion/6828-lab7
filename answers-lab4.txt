@@ -1,0 +1,53 @@
+Emilio Sison
+
+Question 1:
+	The CPUs use neither the early equivalent low address mapping, nor the kernel's
+	own page table mapping, but have their addresses at this point defined by where
+	the code physically is - at MPENTRY_PADDR. They simply measure the difference
+	between the load address of a particular tag in code and the start of the code
+	(mpentry_start), and add it to the physical address given to get the link
+	address.
+
+Question 2:
+	Since the values on the stack are mostly unique to a single switch into the
+	kernel, having a shared stack could probably work in principle, where the
+	hardware waits for the lock to be acquired before pushing the pertinent values.
+	In JOS, however, the implementation of the big shared lock is something only
+	enforced by the code, and the processor hardware itself pushes to its specified
+	kernel stack without much moderation. Hence, the race condition for the kernel
+	that would exist without the lock would still be present if there was a shared
+	stack, for instance with different interrupts both writing to the stack, and
+	being read in the wrong order.
+
+Question 3:
+	The code is still in kernel mode before and after the switch, so privileges are
+	not an issue. Previously, in env_setup_vum, all of the environment page 
+	directories were mapped above UTOP using the kern_pgdir as a template, and e,
+	being part of envs, falls within this range so the mapping stays the same.
+
+Question 4:
+	Registers are essential to having code restart smoothly, because they include
+	vital info such as stack pointers, return addresses and arguments. While an
+	environment is waiting to run, its register states are stored in its trapframe,
+	to be restored when env_pop_tf() is called. Since environments should only be
+	stopped by exceptions and interrupts, with system calls such as sys_yield
+	being one common example, the hardware takes care of pushing register values,
+	with trap() saving the other registers onto the stack, then into the struct
+	Env's trapframe.
+
+Challenge!:
+	I did the first challenge problem - changing the system call interface so that
+	ipc_send() doesn't need to loop. It should continue to wait for the target
+	environment to start receiving, because otherwise there is a sort of race
+	condition, where it might be called before the other process has time to ready
+	itself to receive data. To fix this and get around the userspace loop, I added
+	an attribute to Env, env_jump_syscall, initialized to zero in env_create.
+	When this is 1, however, it signals to env_run() that the registers eax, edx,
+	ecx, ebx, edi and esi are primed for another syscall. These are loaded up by a
+	new method in syscall.c, syscall_hold(), which is passed the same argument
+	setup as syscall(), but instead sets env_jump_syscall to 1 and stores the
+	future syscall arguments in their corresponding registers before yielding.
+	env_jump_syscall is reset to 0 at the start of every syscall(). So the final
+	step is to get sys_ipc_try_send() to call syscall_hold() instead of returning
+	-E_IPC_NOT_RECV, with the same arguments as the previous call, until either an
+	error is reached or the data is sent.

@@ -1,0 +1,18 @@
+Question 1:
+	No - flags are stored in the trapframe when a process is not running,
+	and loaded when it does start running
+
+Challenge!
+	For my challenge problem I implemented a lightweight eviction policy. To
+	this end I added a static counter in the block cache pgfault handler that to
+	count the number of blocks in the cache. I also defined three constants,
+	EVICT_CHECK, EVICT_MARGIN and EVICT_LIMIT in inc/fs.h. When the counter
+	reaches	EVICT_CHECK, it starts labelling non-dirty cached blocks as
+	not-accessed, stopping at EVICT_CHECK + EVICT_MARGIN (just in the
+	off-chance that the function exits at EVICT_CHECK before they are marked).
+	Upon reaching EVICT_LIMIT, it removes blocks that are marked as
+	not-accessed (aside from the current one being added), and resets the counter.
+
+	Testing it was more of an observational task - I set the EVICT constants to
+	low values and had it print a message when a block was evicted - which
+	happened every so often seemingly with no negative repercussions.

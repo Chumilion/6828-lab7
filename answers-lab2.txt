@@ -1,0 +1,123 @@
+Emilio Sison - lab2
+
+Question 1:
+        uintptr_t - the uint32_t address that value represents is dereferenced
+                    and has its location written to. All dereferences are virtual
+                    pointers, so x should be a uintptr_t.
+
+Question 2:
+        Entry   Base Virtual Address    Points to (logically)
+
+        1023    0xffc00000              Page table for top 4MB of phys memory
+        1022    0xff800000              Page table for next to top 4MB of phys memory
+        960     0xf0000000              Top of the kernel stack
+        958     0xef400000              The page directory itself, accessed at UVPT
+        956     0xef000000              The PageInfo array, readable by the user
+        2       0x00800000              Not yet assigned (but will be program data and heap)
+        1       0x00400000              Not yet assigned (but will be user STAB data)
+        0       0x00000000              [see next question]
+
+Question 3:
+        All memory is accessed through the MMU, and is specified by a virtual address.
+        The MMU goes through the page directory and tables, checks the process that
+        requested the memory (e.g. kernel: CPL0, user: CPL3) against the permissions
+        specified in the page table entries, and either returns the value at the
+        physical address or produces a fault. This virtual barrier protects illegitimate
+        exchange of data, even though the actual addresses are all mixed.
+
+Question 4:
+        In mem_init, we map all of the physical memory to the virtual memory from
+        KERNBASE to 2^32. Since mapped physical memory is one-to-one with virtual
+        memory, the maximum supported physical memory must be 2^32 - KERNBASE = 
+        0x100000000 - 0xf0000000 = 2^28 or 256MB.
+        
+                256MB
+
+Question 5:
+        With 2^32 virtual addresses, we would need 2^32/2^12 pages.
+        With 2^20 pages, we would need 2^10 page tables, and 1 page directory.
+        Each page table takes up (2^10)*4 bytes, and the page directory also takes up
+        (2^10)*4 bytes (small in comparison). That's around 2^22 bytes = 4MB taken up
+        for memory management.
+
+                4MB
+
+Question 6:
+        In JOS, the addresses above KERNBASE are mapped to physical addresses 0 and up.
+        While we are still working to set up the kernel, the operating system uses a
+        temporary mapping between [0, 4MB) and [0, 4MB), specified in entrypgdir.c.
+        At this time, both the conventional [KERNBASE, KERNBASE + 4MB) and [0, 4MB)
+        virtual mappings are in place, so as stated in entry.S, we jump to the more
+        conventional mapping with the line
+
+                jmp *%eax
+
+Challenge!:
+	I did the second challenge, writing three commands: showmappings, chgperms, memdump
+	These were implemented in kern/monitor.c (and added to kern/monitor.h) as
+	mon_showmappings, mon_chgperms and mon_memdump
+
+	showmappings
+		Display the physical address mappings
+	
+		Takes in one to three integer arguments: if one, then outputs the
+		physical address mapping of that virtual address, by using pgdir_walk,
+		as well as the read/write and user permission statuses - PTE_W and PTE_U.
+		If it has not been mapped yet, it will print out a "Hasn't been mapped!"
+		message. If there are two inputs, then it outputs the physical address and
+		permissions of every virtual address between the two addresses,themselves
+		including. If three, adds an interval between outputed addresses.
+
+		Ex:
+			showmappings 0x3000 0x7000 0x1000
+		Out:
+			0x00003000: Hasn't been mapped!
+			0x00004000: Hasn't been mapped!
+			0x00005000: Hasn't been mapped!
+			0x00006000: Hasn't been mapped!
+			0x00007000: Hasn't been mapped!
+
+		Ex:
+			showmappings 0xf0000000
+		Out:
+			0xf0000000: 0x00000000
+			    Read/Write: true
+			    User: false
+
+	chgperms
+		Change the permissions of a page
+
+		Takes a list of arguments - the first is an address in the page of
+		interest. It then loops through the rest of the arguments, changing the
+		read/write, user and present permissions of the page in that order.
+		The argument options are clear, rwon (read/write on), rwoff, useron,
+		useroff, preson (present on), presoff, compared with the argv entries
+		using strtol. The altering of permissions is done by bitwise &= ~ and
+		|= on the extracted permissions of the page, found using pgdir_walk
+
+		Ex:
+			chgperms 0xf0000000 clear useron
+
+	memdump
+		Dump the contents of virtual or physical memory
+
+		Takes in one or two addresses - printing out the memory at these addresses.
+		By default, virtual, but an optional first 'p' argument can make it look
+		through physical addresses. The major check for virtual addresses is
+		whether it has been mapped - this is done using pgdir_walk. The major check
+		for physical addresses is whether it is within the JOS physical memory
+		limits - this is done by making sure it is less than 2^32 - KERNBASE, before
+		being converted to a more manageable virtual address with KADDR. Each
+		address is looked at separately, so there is no issue with cross page
+		addresses
+
+		Ex:
+			memdump p 0x0 0x5
+		Out:
+			0xf000ff53
+			0x53f000ff
+			0xff53f000
+			0x00ff53f0
+			0xf000ff53
+			0xc3f000ff
+

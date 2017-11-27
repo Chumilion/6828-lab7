@@ -1,0 +1,44 @@
+Emilio Sison
+
+Question 1:
+	There currently is specialization for each handler function, allowing for
+	instance a different treatment process-ending faults and more mild traps, as
+	well as varying error codes. Interrupt handlers may also call each other with
+	a modularity that would not be present with a single function.
+
+Question 2:
+	The final argument to SETGATE, dpl, specifies the privilege level needed to
+	trigger that particular interrupt. Most, with a few exceptions, have this set
+	to 0, i.e. reserving this power for the kernel, as part of a general theme of
+	maintaining security and segmentation. The kernel chooses when and how to
+	accept access into its entry points.
+
+Question 3:
+	I actually had this problem at first, which was because my SETGATE for
+	breakpoints had a privilege level of 0 - i.e. could not be called by user
+	programs as intended, and so would trigger a general protection fault.
+	Changing it to 3 allows it to be called by user programs as a debugging tool
+
+Question 4:
+	This is to prevent malicious or incorrectly coded user programs from
+	accessing the wrong entrypoint, such as a page fault, which might be used to
+	reset important memory. At the same time, more harmless functions, such as
+	breakpoints, may be called by users.
+
+Challenge!
+	I made shell commands, continue and next, that would detect if the curenv was
+	still running and act accordingly. Continue made sure that the trap flag on
+	eflags was set to 0, and loaded the curenv with the trapframe passed into the
+	mon_ function, before calling env_run. Next was similar, but a bit more
+	complex, starting with turning the trap flag of eflags on. This would cause a
+	debug exception at every instruction once curenv continued. To accomplish
+	this, I had to make a few changes to trap_dispatch: adding an exception for
+	T_DEBUG, in order to catch and funnel each step back into the monitor. In
+	addition, I created a helper function, next_end, that would be called by the
+	T_DEBUG case and use stabs (as in Lab 1) to print information about the
+	instruction that was just called. I originally tried to including inline
+	assembly swapping the return eip of the mon_next function into the next_end
+	to skip the welcome monitor message... but unfortunately the kernel wasn't
+	having any of it. In the interest of time, I just had next_end call monitor()
+	to be able to progress to the next instruction.
+	interest of time, I decided to 
